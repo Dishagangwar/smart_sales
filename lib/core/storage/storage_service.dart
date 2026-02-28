@@ -5,6 +5,9 @@ class StorageService {
   final _storage = const FlutterSecureStorage();
   static const _tokenKey = 'accessToken';
   static const _selectedRoleKey = 'userRole';
+  static const _savedEmailKey = 'savedEmail';
+  static const _savedPasswordKey = 'savedPassword';
+
   // Role ab token ke andar hai, isliye alag se save karne ki zaroorat nahi
   Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
@@ -13,8 +16,29 @@ class StorageService {
   Future<String?> getToken() async {
     return await _storage.read(key: _tokenKey);
   }
+
   Future<void> saveRole(String role) async {
     await _storage.write(key: _selectedRoleKey, value: role);
+  }
+
+  // --- REMEMBER ME CREDENTIALS ---
+  Future<void> saveCredentials(String email, String password) async {
+    await _storage.write(key: _savedEmailKey, value: email);
+    await _storage.write(key: _savedPasswordKey, value: password);
+  }
+
+  Future<Map<String, String>?> getSavedCredentials() async {
+    final email = await _storage.read(key: _savedEmailKey);
+    final password = await _storage.read(key: _savedPasswordKey);
+    if (email != null && password != null) {
+      return {'email': email, 'password': password};
+    }
+    return null;
+  }
+
+  Future<void> deleteCredentials() async {
+    await _storage.delete(key: _savedEmailKey);
+    await _storage.delete(key: _savedPasswordKey);
   }
 
   // Naya logic: Token decode karke role nikalna
@@ -43,8 +67,9 @@ class StorageService {
 }
   // 4. Clear Storage (Logout ke liye)
   Future<void> clearStorage() async {
-    // Yeh function accessToken aur baaki sab data delete kar dega
-    await _storage.deleteAll();
-    print("Storage cleared successfully.");
+    // SECURITY: We only delete session data here so we don't accidentally wipe Remember Me credentials
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _selectedRoleKey);
+    print("Session tokens cleared successfully.");
   }
 }

@@ -13,7 +13,18 @@ class CreateCategoryScreen extends StatefulWidget {
 class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descController = TextEditingController();
+  String? selectedType; // New variable to track the selected type
   bool isLoading = false;
+  
+  // The allowed types as per the backend documentation
+  final List<String> categoryTypes = [
+    "hardware", 
+    "paints", 
+    "sanitary", 
+    "marbles", 
+    "stationary", 
+    "others"
+  ];
 
   Future<void> handleCreateCategory() async {
     // 1. UI Validation: Prevent empty submissions
@@ -24,68 +35,72 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
       return;
     }
 
+    if (selectedType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a category type")),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
-      // 2. Fetch required state data from storage
+      // 2. Fetch required state data from storage (Simpler)
       final storage = StorageService();
       final token = await storage.getToken();
-      final currentRole = await storage.getRole();
 
       // 3. Safety Check: Handle context across async gap
       if (!mounted) return;
 
-      // 4. Role Validation: Check permissions before API call
-      if (currentRole == "ADMIN" || currentRole == "SUPER_ADMIN") {
-        // 5. Protected API Call: Authorization header is required
-        final response = await http.post(
-          Uri.parse("https://chamanmarblel.onrender.com/api/categories"),
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer $token",
-          },
-          body: jsonEncode({
-            "name": nameController.text.trim(),
-            "description": descController.text.trim(),
-          }),
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No token found. Please login again.")),
         );
+        return;
+      }
 
-        final data = jsonDecode(response.body);
+      print("DEBUG TOKEN: $token"); // Debug to ensure token is sent
 
-        if (!mounted) return;
-        if (response.statusCode == 201 && data['success'] == true) {
+      // 5. Protected API Call: Send token directly without frontend role check
+      final response = await http.post(
+        Uri.parse("https://chamanmarblel.onrender.com/api/categories"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "name": nameController.text.trim(),
+          "description": descController.text.trim(),
+          "type": selectedType, // Reverting type array back to string as per simple fix request
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      print("DEBUG API RESPONSE: $data | Status Code: ${response.statusCode}"); 
+
+      if (!mounted) return;
+      
+      if (response.statusCode >= 200 && response.statusCode < 300 && data['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? "Category created successfully"),
           ),
         );
         Navigator.pop(context);
-      }
-      // Handle Forbidden errors specifically
-      else if (response.statusCode == 403) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Forbidden: Unauthorized Role")),
-        );
       } else {
+        // Any error logic (including 403) from the backend is handled here
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(data['message'] ?? "Failed to create category"),
+            content: Text(data['message'] ?? "Failed to create category (Status: ${response.statusCode})"),
           ),
         );
       }
-      }
-
-      // 6. Response Handling: Align with Success Response documentation
       
     } catch (e) {
-      print(
-        "FULL ERROR: $e",
-      ); // 👈 Isse console mein dekhein asli error kya hai
+      print("FULL ERROR: $e"); 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error: $e"),
-          ), // User ko bhi real error dikhayein debug ke liye
+          SnackBar(content: Text("Error: $e")), 
         );
       }
     } finally {
@@ -105,6 +120,26 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
+            DropdownButtonFormField<String>(
+              value: selectedType,
+              decoration: const InputDecoration(
+                labelText: "Category Type",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.merge_type_outlined),
+              ),
+              items: categoryTypes.map((String type) {
+                return DropdownMenuItem<String>(
+                  value: type,
+                  child: Text(type.toUpperCase()), // Capitalize for better look
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedType = newValue;
+                });
+              },
+            ),
+            const SizedBox(height: 15),
             TextField(
               controller: nameController,
               decoration: const InputDecoration(

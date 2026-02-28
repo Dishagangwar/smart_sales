@@ -1,10 +1,8 @@
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
+import 'package:smart_sales/core/storage/storage_service.dart';
 import 'package:smart_sales/features/auth/data/models/create_admin_respone.dart';
-
 import 'models/login_request_model.dart';
-
 class AuthService {
   final String baseUrl = "https://chamanmarblel.onrender.com";
 
@@ -27,10 +25,10 @@ class AuthService {
 
       return decoded;
     } else {
-      throw Exception("Login Failed");
+      final errorMessage = decoded['message'] ?? "Login Failed: Invalid credentials or server error";
+      throw Exception(errorMessage);
     }
   }
-  
   Future<CreateAdminResponse> createAdmin({
   required String firstName,
   required String lastName,
@@ -39,6 +37,9 @@ class AuthService {
   required Map<String, dynamic> location,
   required String token, // Pass the token from your secure storage
 }) async {
+      final storage = StorageService();
+    final token = await storage.getToken();
+    
   final response = await http.post(
     Uri.parse("$baseUrl/api/users"),
     headers: {
